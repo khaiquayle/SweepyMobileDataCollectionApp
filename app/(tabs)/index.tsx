@@ -3,13 +3,14 @@ import { Picker } from "@react-native-picker/picker"; // dropdown menus
 import { Audio } from 'expo-av'; // sound playback + recording
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system';
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 const { FileSystemUploadType } = FileSystem as unknown as { FileSystemUploadType: any };
 
 export default function Index() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [recording, setRecording] = useState<null | Audio.Recording>(null);
+  const isRecordingRef = useRef(false);
 
   const [description, setDescription] = useState("");
   const [material, setMaterial] = useState("Plastic");
@@ -62,6 +63,7 @@ export default function Index() {
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       setRecording(recording);
+      isRecordingRef.current = true;
       
       // Play beep and auto-stop recording when beep ends
       try {
@@ -72,7 +74,8 @@ export default function Index() {
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded && status.didJustFinish) {
             // Beep finished, stop recording automatically
-            if (recording) {
+            if (recording && isRecordingRef.current) {
+              isRecordingRef.current = false;
               recording.stopAndUnloadAsync().then(() => {
                 const uri = recording.getURI();
                 setRecording(null);
@@ -99,7 +102,8 @@ export default function Index() {
 
   const stopRecording = async () => {
     try {
-      if (!recording) return;
+      if (!recording || !isRecordingRef.current) return;
+      isRecordingRef.current = false;
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI(); // file URI on phone
       setRecording(null);
