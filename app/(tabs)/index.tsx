@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Text, View, TouchableOpacity, Alert, StyleSheet, TextInput } from 'react-native';
 import { Audio } from 'expo-av'; //sound playback + recording
 import AsyncStorage from "@react-native-async-storage/async-storage"; //saving metadata
-import { TextInput } from "react-native";
 import { Picker } from "@react-native-picker/picker"; //dropdown menus
 
 export default function Index() {
