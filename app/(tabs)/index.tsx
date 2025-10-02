@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Text, View, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av'; //sound playback + recording
-import AsyncStorage from "@react-native-aync-storage/async-storage"; //saving metadata
+import AsyncStorage from "@react-native-async-storage/async-storage"; //saving metadata
 import { TextInput } from "react-native";
 import { Picker } from "@react-native-picker/picker"; //dropdown menus
 
@@ -54,7 +54,7 @@ export default function Index() {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      const { recording } = await Audio.Recoding.createAsync(
+      const { recording } = await Audio.Recording.createAsync(
         Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
       );
       setRecording(recording);
@@ -212,6 +212,7 @@ const styles = StyleSheet.create({
   borderRadius: 5,
   paddingHorizontal: 10,
   marginTop: 10,
+  backgroundColor: "white",
 },
   buttonText: {
     color: 'white',
