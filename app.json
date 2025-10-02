@@ -40,6 +40,9 @@
         }
       ]
     ],
+    "extra": {
+      "uploadUrl": "https://example.com/upload"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
