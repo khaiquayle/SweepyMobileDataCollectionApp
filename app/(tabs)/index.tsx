@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text, View, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { Text, View, TouchableOpacity, Alert, StyleSheet, TextInput } from 'react-native';
 import { Audio } from 'expo-av'; //sound playback + recording
 import AsyncStorage from "@react-native-async-storage/async-storage"; //saving metadata
 import { TextInput } from "react-native";
@@ -66,6 +66,7 @@ export default function Index() {
 
   const stopRecording = async () => {
     try {
+      if (!recording) return;
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI(); // file URI on phone
       setRecording(null);
@@ -116,9 +117,9 @@ export default function Index() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style = {[styles.recButton, { backgroundColor: "red" }]}
-        onPress = {startRecording}
-        disabled = {recording !== null}
+        style={[styles.recButton, { backgroundColor: "red" }]}
+        onPress={startRecording}
+        disabled={recording !== null}
       >
         <Text style={styles.buttonText}>Start Recording</Text>
       </TouchableOpacity>
@@ -143,7 +144,7 @@ export default function Index() {
       <Text style={styles.label}>Material:</Text>
       <Picker
         selectedValue={material}
-        onValueChange={(val) => setMaterial(val)}
+        onValueChange={setMaterial}
         style={styles.picker}
       >
         <Picker.Item label="Plastic" value="Plastic" />
@@ -155,7 +156,7 @@ export default function Index() {
       <Text style={styles.label}>Size:</Text>
       <Picker
         selectedValue={size}
-        onValueChange={(val) => setSize(val)}
+        onValueChange={setSize}
         style={styles.picker}
       >
         <Picker.Item label="Small" value="Small" />
@@ -166,7 +167,7 @@ export default function Index() {
       <Text style={styles.label}>Shape:</Text>
       <Picker
         selectedValue={shape}
-        onValueChange={(val) => setShape(val)}
+        onValueChange={setShape}
         style={styles.picker}
       >
         <Picker.Item label="Flat" value="Flat" />
@@ -184,6 +185,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: "#f8f8f8",
   },
   title: {
     fontSize: 24,
@@ -203,20 +205,30 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 10,
     marginVertical: 10,
+    alignItems: 'center',
   },
   textInput: {
-  width: 200,
-  height: 40,
-  borderColor: "gray",
-  borderWidth: 1,
-  borderRadius: 5,
-  paddingHorizontal: 10,
-  marginTop: 10,
-  backgroundColor: "white",
-},
+    width: 200,
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    marginTop: 10,
+    backgroundColor: 'white',
+  },
   buttonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  label: {
+    marginTop: 20,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  picker: {
+    width: 200,
+    height: 50,
   },
 });
