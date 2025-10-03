@@ -44,7 +44,17 @@ export default function HistoryScreen() {
 
   const playLocal = async (item: Entry) => {
     if (!item.file) return;
+    
+    // Set audio mode for playback
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: false,
+      playThroughEarpieceAndroid: false,
+    });
+    
     const { sound } = await Audio.Sound.createAsync({ uri: item.file });
+    await sound.setVolumeAsync(1.0); // Set volume to maximum
     await sound.playAsync();
   };
 
@@ -64,7 +74,7 @@ export default function HistoryScreen() {
     }
   };
 
-  const deleteEntry = async (indexInView: number) => {
+  const deleteEntry = async (indexInView: number, swipeableRef: any) => {
     try {
       const json = await AsyncStorage.getItem('entries');
       const list: Entry[] = json ? JSON.parse(json) : [];
@@ -77,20 +87,26 @@ export default function HistoryScreen() {
       if (toDelete?.file) {
         try { await FileSystem.deleteAsync(toDelete.file, { idempotent: true }); } catch {}
       }
+      // Close the swipe after deletion
+      if (swipeableRef) {
+        swipeableRef.close();
+      }
     } catch (e) {
       console.error(e);
       Alert.alert('Failed to delete');
     }
   };
 
-  const renderRightActions = (index: number) => (
-    <TouchableOpacity style={styles.deleteAction} onPress={() => void deleteEntry(index)}>
+  const renderRightActions = (index: number, swipeableRef: any) => (
+    <TouchableOpacity style={styles.deleteAction} onPress={() => void deleteEntry(index, swipeableRef)}>
       <Text style={styles.deleteText}>Delete</Text>
     </TouchableOpacity>
   );
 
   const renderItem = ({ item, index }: { item: Entry; index: number }) => (
-    <Swipeable renderRightActions={() => renderRightActions(index)}>
+    <Swipeable 
+      renderRightActions={(progress, dragX, swipeableRef) => renderRightActions(index, swipeableRef)}
+    >
       <View style={styles.card}>
         <Text style={styles.title}>{item.description || `Recording ${entries.length - index}`}</Text>
         <Text style={styles.meta}>{item.material} • {item.size} • {item.shape}</Text>

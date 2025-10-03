@@ -26,10 +26,20 @@ export default function Index() {
     try {
       setIsPlaying(true);
       
+      // Set audio mode for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
+      
       const { sound } = await Audio.Sound.createAsync(
         require('@/assets/sounds/beep.wav')
       );
       
+      // Set volume to maximum after creating the sound
+      await sound.setVolumeAsync(1.0);
       await sound.playAsync();
       
       // Wait for sound to finish
@@ -70,6 +80,9 @@ export default function Index() {
         const { sound } = await Audio.Sound.createAsync(
           require('@/assets/sounds/beep.wav')
         );
+        
+        // Set volume to maximum after creating the sound
+        await sound.setVolumeAsync(1.0);
         
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded && status.didJustFinish) {
