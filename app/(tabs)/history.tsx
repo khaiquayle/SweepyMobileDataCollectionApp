@@ -3,11 +3,12 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 type Entry = {
   file?: string | null;
+  fileName?: string;
   cloudUrl?: string | null;
   description?: string;
   material?: string;
@@ -61,14 +62,32 @@ export default function HistoryScreen() {
 
   const shareLocal = async (item: Entry) => {
     if (item.file && (await Sharing.isAvailableAsync())) {
-      const metadata = `${item.description || 'Recording'}_${item.material}_${item.size}_${item.shape}`;
-      const fileName = `${metadata}.m4a`;
-      
-      await Sharing.shareAsync(item.file, {
-        mimeType: 'audio/m4a',
-        dialogTitle: 'Share Recording',
-        UTI: 'public.audio',
-      });
+      // Use stored fileName or generate one from metadata
+      const fileName = item.fileName ||
+        `${item.material}_${item.size}_${item.shape}_${item.description || 'recording'}.m4a`;
+
+      // Copy file to a temp location with the proper name for sharing
+      const fileExtension = item.file.split('.').pop();
+      const newUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+      try {
+        await FileSystem.copyAsync({
+          from: item.file,
+          to: newUri,
+        });
+
+        await Sharing.shareAsync(newUri, {
+          mimeType: 'audio/m4a',
+          dialogTitle: 'Share Recording',
+          UTI: 'public.audio',
+        });
+
+        // Clean up temp file after sharing
+        await FileSystem.deleteAsync(newUri, { idempotent: true });
+      } catch (error) {
+        console.error('Failed to share file:', error);
+        Alert.alert('Failed to share file');
+      }
     } else {
       Alert.alert('Sharing not available or file missing.');
     }
@@ -104,12 +123,13 @@ export default function HistoryScreen() {
   );
 
   const renderItem = ({ item, index }: { item: Entry; index: number }) => (
-    <Swipeable 
+    <Swipeable
       renderRightActions={(progress, dragX, swipeableRef) => renderRightActions(index, swipeableRef)}
     >
       <View style={styles.card}>
         <Text style={styles.title}>{item.description || `Recording ${entries.length - index}`}</Text>
         <Text style={styles.meta}>{item.material} • {item.size} • {item.shape}</Text>
+        {item.fileName && <Text style={styles.fileName}>{item.fileName}</Text>}
         <Text style={styles.time}>{item.timestamp}</Text>
         <View style={styles.row}>
           <TouchableOpacity style={[styles.button, styles.play]} onPress={() => void playLocal(item)} disabled={!item.file}>
@@ -142,14 +162,16 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#F5F5F7',
   },
   header: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: 'white',
+    fontSize: 34,
+    fontWeight: '700',
+    marginTop: 60,
+    marginBottom: 24,
+    marginHorizontal: 24,
+    color: '#1D1D1F',
+    letterSpacing: -0.5,
   },
   emptyContainer: {
     flexGrow: 1,
@@ -157,57 +179,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   empty: {
-    color: '#ccc',
+    color: '#86868B',
+    fontSize: 16,
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 24,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    marginBottom: 6,
   },
   meta: {
+    marginTop: 4,
+    color: '#86868B',
+    fontSize: 14,
+  },
+  fileName: {
     marginTop: 6,
-    color: '#555',
+    color: '#007AFF',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   time: {
-    marginTop: 4,
-    color: '#777',
+    marginTop: 6,
+    color: '#86868B',
     fontSize: 12,
   },
   row: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
+    gap: 10,
+    marginTop: 14,
   },
   button: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
   play: { backgroundColor: '#007AFF' },
   share: { backgroundColor: '#5856D6' },
-  buttonText: { color: 'white', fontWeight: '700' },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 15,
+  },
   deleteAction: {
     backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 90,
-    borderRadius: 10,
+    width: 80,
+    borderRadius: 14,
     marginBottom: 12,
   },
   deleteText: {
     color: 'white',
-    fontWeight: '700',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
 
