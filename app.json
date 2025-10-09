@@ -40,6 +40,10 @@
         }
       ]
     ],
+    "extra": {
+      "supabaseUrl": "https://mzkwdnjnvgweifngpaoa.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16a3dkbmpudmd3ZWlmbmdwYW9hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0NzM0ODYsImV4cCI6MjA3NTA0OTQ4Nn0.AcgtYmXXiYv5wDnQaP6y0B02uiRNY2mFICzk9mq-Zkw"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
