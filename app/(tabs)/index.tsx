@@ -1,12 +1,11 @@
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import { decode } from 'base64-arraybuffer';
 import { Audio } from 'expo-av';
-import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system';
 import React, { useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { decode } from 'base64-arraybuffer';
-import { supabase } from '@/lib/supabase';
 
 export default function Index() {
   const [recording, setRecording] = useState<null | Audio.Recording>(null);
@@ -30,7 +29,7 @@ export default function Index() {
       // CRITICAL: Load sweep sound FIRST before starting recording
       // This prevents "Only one recording can be prepared" error
       const { sound } = await Audio.Sound.createAsync(
-        require('@/assets/sounds/beep.wav'),
+        require('@/assets/sounds/audiocheck.net_sweep_10Hz_22000Hz_-3dBFS_1s.wav'),
         { shouldPlay: false, volume: 1.0 } // Preload at max volume, don't play yet
       );
 
