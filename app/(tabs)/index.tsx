@@ -1,23 +1,26 @@
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import { decode } from 'base64-arraybuffer';
 import { Audio } from 'expo-av';
-import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system';
 import React, { useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { decode } from 'base64-arraybuffer';
-import { supabase } from '@/lib/supabase';
 
 export default function Index() {
   const [recording, setRecording] = useState<null | Audio.Recording>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const isRecordingRef = useRef(false);
   const autoStopTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sweepSoundRef = useRef<Audio.Sound | null>(null);
+  const recordingPhaseRef = useRef<'ambient' | 'sweep' | 'complete'>('ambient');
+  const ambientStartTimeRef = useRef<number | null>(null);
 
   const [description, setDescription] = useState("");
   const [material, setMaterial] = useState("Plastic");
   const [size, setSize] = useState("Small");
   const [shape, setShape] = useState("Flat");
+  const [recordingStatus, setRecordingStatus] = useState("Ready to record");
 
   const startRecordingWithSound = async () => {
     try {
@@ -27,22 +30,7 @@ export default function Index() {
         return;
       }
 
-      // CRITICAL: Load sweep sound FIRST before starting recording
-      // This prevents "Only one recording can be prepared" error
-      const { sound } = await Audio.Sound.createAsync(
-        require('@/assets/sounds/beep.wav'),
-        { shouldPlay: false, volume: 1.0 } // Preload at max volume, don't play yet
-      );
-
-      // Get sound duration for auto-stop timing
-      const status = await sound.getStatusAsync();
-      let soundDuration = 0;
-      if (status.isLoaded && status.durationMillis) {
-        soundDuration = status.durationMillis;
-      }
-
       // Set audio mode for recording with maximum playback volume
-      // DoNotMix (1) prevents other audio from reducing our sweep volume
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -53,48 +41,71 @@ export default function Index() {
         interruptionModeAndroid: 1, // DoNotMix - full volume, no ducking
       });
 
-      // Store sound reference for cleanup in stopRecording
-      sweepSoundRef.current = sound;
-
-      // Start recording AFTER sound is loaded
+      // Start recording immediately
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
+      recordingRef.current = recording;
       setRecording(recording);
       isRecordingRef.current = true;
+      recordingPhaseRef.current = 'ambient';
+      ambientStartTimeRef.current = Date.now();
+      setRecordingStatus("Recording ambient noise...");
 
-      // Play the preloaded sweep sound at maximum volume
+      // Wait 1.5 seconds for ambient noise collection
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Load and play sweep sound
+      const { sound } = await Audio.Sound.createAsync(
+        require('@/assets/sounds/audiocheck.net_sweep_10Hz_22000Hz_-3dBFS_1s.wav'),
+        { shouldPlay: false, volume: 1.0 }
+      );
+
+      // Get sound duration for timing
+      const status = await sound.getStatusAsync();
+      const soundDuration = status.isLoaded && status.durationMillis ? status.durationMillis : 1000;
+
+      // Store sound reference
+      sweepSoundRef.current = sound;
+      recordingPhaseRef.current = 'sweep';
+      setRecordingStatus("Playing sweep...");
+
+      // Play the sweep sound
       await sound.setVolumeAsync(1.0);
       await sound.playAsync();
 
-      Alert.alert("Recording with sweep sound...");
+      console.log(`Sweep duration: ${soundDuration}ms, setting auto-stop in ${soundDuration + 2000}ms`);
 
-      // Auto-stop recording when sweep ends (with buffer for reflections)
-      if (soundDuration > 0) {
-        autoStopTimerRef.current = setTimeout(() => {
-          if (isRecordingRef.current && recording) {
-            stopRecording();
-          }
-          sound.unloadAsync();
-        }, soundDuration + 500);
-      }
-
-      // Cleanup when sound finishes playing
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
+      // Auto-stop the recording after sweep finishes + 2 seconds for reflections
+      // Note: We already waited 1.5s for ambient, so timer should be: sweep duration + 2s buffer
+      const totalRecordingTime = soundDuration + 2000;
+      
+      autoStopTimerRef.current = setTimeout(() => {
+        console.log("Auto-stop timer fired! isRecording:", isRecordingRef.current, "recording:", recordingRef.current);
+        recordingPhaseRef.current = 'complete';
+        stopRecording();
+      }, totalRecordingTime) as unknown as NodeJS.Timeout;
 
     } catch (err) {
       console.error("Failed to start recording", err);
-      Alert.alert("Failed to start recording", err.message);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      Alert.alert("Failed to start recording", errorMessage);
+      // Reset all state
+      recordingRef.current = null;
+      setRecording(null);
+      isRecordingRef.current = false;
+      setRecordingStatus("Ready to record");
     }
   };
 
   const stopRecording = async () => {
     try {
-      if (!recording || !isRecordingRef.current) return;
+      console.log("stopRecording called - isRecording:", isRecordingRef.current, "recording:", recordingRef.current !== null);
+      const currentRecording = recordingRef.current;
+      if (!currentRecording || !isRecordingRef.current) {
+        console.log("stopRecording: early return - no recording or not recording");
+        return;
+      }
 
       // Clear auto-stop timer if exists
       if (autoStopTimerRef.current) {
@@ -114,25 +125,60 @@ export default function Index() {
       }
 
       isRecordingRef.current = false;
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      await currentRecording.stopAndUnloadAsync();
+      const fullRecordingUri = currentRecording.getURI();
+      recordingRef.current = null;
       setRecording(null);
+      setRecordingStatus("Finished recording and saving...");
 
-      // Generate descriptive filename
+      // Generate descriptive filename base
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const fileName = `${material}_${size}_${shape}_${description || 'recording'}_${timestamp}.m4a`;
+      const baseName = `${material}_${size}_${shape}_${description || 'recording'}_${timestamp}`;
+      
+      // Filenames for the two recordings
+      const fullFileName = `${baseName}_full.m4a`;
+      const ambientFileName = `${baseName}_ambient.m4a`;
 
-      Alert.alert("Recording saved!", fileName);
+      // Copy the full recording to the new filename
+      const fullDestUri = await copyRecordingFile(fullRecordingUri, fullFileName);
+      
+      // Show completion message
+      Alert.alert("Finished recording!", `Saved as:\n${fullFileName}\n\nAmbient portion: first 1.5 seconds`);
 
       // Save entry with metadata + file URI
-      await saveEntry(uri, fileName);
+      await saveEntry(fullDestUri, fullFileName, ambientFileName);
     } catch (err) {
       console.error("Failed to stop recording", err);
       Alert.alert("Failed to stop recording");
+      // Reset all state on error
+      recordingRef.current = null;
+      setRecording(null);
+      isRecordingRef.current = false;
+      setRecordingStatus("Ready to record");
     }
   };
 
-  const uploadRecording = async (fileUri: string | null, fileName: string): Promise<string | null> => {
+  const copyRecordingFile = async (sourceUri: string | null, destFileName: string): Promise<string | null> => {
+    if (!sourceUri) return null;
+    
+    try {
+      // Get the destination directory
+      const destUri = `${FileSystem.documentDirectory}${destFileName}`;
+      
+      // Copy the file
+      await FileSystem.copyAsync({
+        from: sourceUri,
+        to: destUri,
+      });
+      
+      return destUri;
+    } catch (err) {
+      console.error("Failed to copy recording file:", err);
+      return sourceUri; // Return original if copy fails
+    }
+  };
+
+  const uploadRecording = async (fileUri: string | null, fileName: string, ambientFileName: string): Promise<string | null> => {
     try {
       if (!fileUri) return null;
 
@@ -164,12 +210,14 @@ export default function Index() {
 
       const publicUrl = urlData?.publicUrl || null;
 
-      // Save metadata to database
+      // Save metadata to database (including ambient file info)
       if (publicUrl) {
         const { error: dbError } = await supabase
           .from('recordings_metadata')
           .insert({
             file_name: fileName,
+            ambient_file_name: ambientFileName,
+            ambient_duration_ms: 1500,
             file_url: publicUrl,
             description,
             material,
@@ -190,11 +238,13 @@ export default function Index() {
     }
   };
 
-  const saveEntry = async (fileUri: string | null, fileName: string) => {
+  const saveEntry = async (fileUri: string | null, fileName: string, ambientFileName: string) => {
     try {
       const entry = {
         file: fileUri,
         fileName,
+        ambientFileName,
+        ambientDurationMs: 1500, // First 1.5 seconds is ambient noise
         description,
         material,
         size,
@@ -210,22 +260,27 @@ export default function Index() {
       await AsyncStorage.setItem("entries", JSON.stringify(entries));
 
       // Try upload in background (non-blocking)
-      uploadRecording(fileUri, fileName).then((cloudUrl) => {
+      uploadRecording(fileUri, fileName, ambientFileName).then((cloudUrl) => {
         if (cloudUrl) {
           // Update entry with cloud URL
           const updatedEntries = entries.map((e: any, index: number) =>
             index === entries.length - 1 ? { ...e, cloudUrl } : e
           );
           AsyncStorage.setItem("entries", JSON.stringify(updatedEntries));
-          Alert.alert("Recording uploaded to cloud!");
         }
       }).catch((err) => {
         console.error("Upload failed in background", err);
       });
 
+      // Reset status back to ready
+      setTimeout(() => {
+        setRecordingStatus("Ready to record");
+      }, 1000);
+
     } catch (err) {
       console.error("Error saving entry", err);
       Alert.alert("Failed to save entry");
+      setRecordingStatus("Ready to record");
     }
   };
         
@@ -250,14 +305,16 @@ export default function Index() {
 
         <TouchableOpacity
           style={[
-            styles.stopButton,
+            styles.cancelButton,
             recording === null && styles.buttonDisabled
           ]}
           onPress={stopRecording}
           disabled={recording === null}
         >
-          <Text style={styles.buttonText}>■ Stop & Save</Text>
+          <Text style={styles.buttonText}>Cancel Recording</Text>
         </TouchableOpacity>
+
+        <Text style={styles.statusText}>{recordingStatus}</Text>
       </View>
 
       <View style={styles.section}>
@@ -438,6 +495,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  cancelButton: {
+    backgroundColor: '#86868B',
+    paddingVertical: 18,
+    borderRadius: 14,
+    marginBottom: 12,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#86868B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   textInput: {
     width: '100%',
     height: 52,
@@ -507,5 +577,13 @@ const styles = StyleSheet.create({
   },
   buttonActive: {
     opacity: 0.8,
+  },
+  statusText: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#86868B',
+    letterSpacing: -0.2,
   },
 });
