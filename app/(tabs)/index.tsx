@@ -210,7 +210,7 @@ export default function Index() {
 
       const publicUrl = urlData?.publicUrl || null;
 
-      // Save metadata to database (including ambient file info)
+      // Save metadata to database (now includes ambient metadata columns)
       if (publicUrl) {
         const { error: dbError } = await supabase
           .from('recordings_metadata')
