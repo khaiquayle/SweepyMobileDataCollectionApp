@@ -18,7 +18,7 @@ export default function Index() {
 
   const [description, setDescription] = useState("");
   const [material, setMaterial] = useState("Plastic");
-  const [size, setSize] = useState("Small");
+  const [size, setSize] = useState("Small (0-4in)");
   const [shape, setShape] = useState("Flat");
   const [recordingStatus, setRecordingStatus] = useState("Ready to record");
 
@@ -334,7 +334,7 @@ export default function Index() {
               <TouchableOpacity
                 style={styles.iosPickerButton}
                 onPress={() => {
-                  const options = ['Plastic', 'Glass', 'Metal', 'Paper', 'Cancel'];
+                  const options = ['Plastic', 'Glass', 'Metal', 'Paper', 'Organic Material', 'Cancel'];
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
                       options,
@@ -363,6 +363,7 @@ export default function Index() {
                 <Picker.Item label="Glass" value="Glass" />
                 <Picker.Item label="Metal" value="Metal" />
                 <Picker.Item label="Paper" value="Paper" />
+                <Picker.Item label="Organic Material" value="Organic Material" />
               </Picker>
             )}
           </View>
@@ -373,7 +374,7 @@ export default function Index() {
               <TouchableOpacity
                 style={styles.iosPickerButton}
                 onPress={() => {
-                  const options = ['Small', 'Medium', 'Large', 'Cancel'];
+                  const options = ['Small (0-4in)', 'Medium (4-10in)', 'Large (>10in)', 'Cancel'];
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
                       options,
@@ -398,9 +399,9 @@ export default function Index() {
                 prompt="Select Size"
                 dropdownIconColor="#1D1D1F"
               >
-                <Picker.Item label="Small" value="Small" />
-                <Picker.Item label="Medium" value="Medium" />
-                <Picker.Item label="Large" value="Large" />
+                <Picker.Item label="Small (0-4in)" value="Small (0-4in)" />
+                <Picker.Item label="Medium (4-10in)" value="Medium (4-10in)" />
+                <Picker.Item label="Large (>10in)" value="Large (>10in)" />
               </Picker>
             )}
           </View>
@@ -411,7 +412,7 @@ export default function Index() {
               <TouchableOpacity
                 style={styles.iosPickerButton}
                 onPress={() => {
-                  const options = ['Flat', 'Cylindrical', 'Spherical', 'Irregular', 'Cancel'];
+                  const options = ['Flat', 'Cylindrical', 'Crushed', 'Spherical', 'Irregular', 'Cancel'];
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
                       options,
@@ -440,6 +441,7 @@ export default function Index() {
                 <Picker.Item label="Cylindrical" value="Cylindrical" />
                 <Picker.Item label="Spherical" value="Spherical" />
                 <Picker.Item label="Irregular" value="Irregular" />
+                <Picker.Item label="Crushed" value="Crushed" />
               </Picker>
             )}
           </View>
