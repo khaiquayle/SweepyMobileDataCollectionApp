@@ -136,8 +136,8 @@ export default function Index() {
       const baseName = `${material}_${size}_${shape}_${description || 'recording'}_${timestamp}`;
       
       // Filenames for the two recordings
-      const fullFileName = `${baseName}_full.wav`;
-      const ambientFileName = `${baseName}_ambient.wav`;
+      const fullFileName = `${baseName}_full.m4a`;
+      const ambientFileName = `${baseName}_ambient.m4a`;
 
       // Copy the full recording to the new filename
       const fullDestUri = await copyRecordingFile(fullRecordingUri, fullFileName);
@@ -194,7 +194,7 @@ export default function Index() {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('recordings')
         .upload(fileName, arrayBuffer, {
-          contentType: 'audio/wav',
+          contentType: 'audio/m4a',
           upsert: false,
         });
 
