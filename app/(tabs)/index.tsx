@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { decode } from 'base64-arraybuffer';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { useEffect, useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AudioRecord from 'react-native-audio-record';
@@ -18,7 +18,7 @@ export default function Index() {
 
   const [description, setDescription] = useState("");
   const [material, setMaterial] = useState("Plastic");
-  const [size, setSize] = useState("Small (0-4in)");
+  const [size, setSize] = useState("Small_0-4in");
   const [shape, setShape] = useState("Flat");
   const [recordingStatus, setRecordingStatus] = useState("Ready to record");
 
@@ -145,7 +145,9 @@ export default function Index() {
 
       // Generate descriptive filename base
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const baseName = `${material}_${size}_${shape}_${description || 'recording'}_${timestamp}`;
+      // Replace spaces in description only (user input)
+      const safeDescription = (description || 'recording').replace(/\s+/g, '_');
+      const baseName = `${material}_${size}_${shape}_${safeDescription}_${timestamp}`;
       
       // Filenames for the two recordings (now WAV format)
       const fullFileName = `${baseName}_full.wav`;
@@ -389,7 +391,7 @@ export default function Index() {
               <TouchableOpacity
                 style={styles.iosPickerButton}
                 onPress={() => {
-                  const options = ['Small (0-4in)', 'Medium (4-10in)', 'Large (>10in)', 'Cancel'];
+                  const options = ['Small_0-4in', 'Medium_4-10in', 'Large_10in-plus', 'Cancel'];
                   ActionSheetIOS.showActionSheetWithOptions(
                     {
                       options,
@@ -414,9 +416,9 @@ export default function Index() {
                 prompt="Select Size"
                 dropdownIconColor="#1D1D1F"
               >
-                <Picker.Item label="Small (0-4in)" value="Small (0-4in)" />
-                <Picker.Item label="Medium (4-10in)" value="Medium (4-10in)" />
-                <Picker.Item label="Large (>10in)" value="Large (>10in)" />
+                <Picker.Item label="Small_0-4in" value="Small_0-4in" />
+                <Picker.Item label="Medium_4-10in" value="Medium_4-10in" />
+                <Picker.Item label="Large_10in-plus" value="Large_10in-plus" />
               </Picker>
             )}
           </View>
