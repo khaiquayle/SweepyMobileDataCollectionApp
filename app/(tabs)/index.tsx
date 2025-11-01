@@ -4,12 +4,12 @@ import { Picker } from "@react-native-picker/picker";
 import { decode } from 'base64-arraybuffer';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AudioRecord from 'react-native-audio-record';
 
 export default function Index() {
-  const [recording, setRecording] = useState<null | Audio.Recording>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState<boolean>(false);
   const isRecordingRef = useRef(false);
   const autoStopTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sweepSoundRef = useRef<Audio.Sound | null>(null);
@@ -22,15 +22,33 @@ export default function Index() {
   const [shape, setShape] = useState("Flat");
   const [recordingStatus, setRecordingStatus] = useState("Ready to record");
 
+  // Initialize AudioRecord for uncompressed WAV recording
+  useEffect(() => {
+    const options = {
+      sampleRate: 44100,        // High quality sample rate
+      channels: 1,              // Mono (1 channel)
+      bitsPerSample: 16,         // 16-bit PCM
+      audioSource: 6,            // Android: VOICE_RECOGNITION (best quality)
+      wavFile: 'recording.wav'   // Temporary filename
+    };
+    
+    AudioRecord.init(options);
+    
+    return () => {
+      // Cleanup if needed
+    };
+  }, []);
+
   const startRecordingWithSound = async () => {
     try {
+      // Request permissions using expo-av (still works for permissions)
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== "granted") {
         Alert.alert("Permission to access microphone is required!");
         return;
       }
 
-      // Set audio mode for recording with maximum playback volume
+      // Set audio mode for playback with maximum volume
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -41,12 +59,9 @@ export default function Index() {
         interruptionModeAndroid: 1, // DoNotMix - full volume, no ducking
       });
 
-      // Start recording immediately
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      recordingRef.current = recording;
-      setRecording(recording);
+      // Start recording with AudioRecord (uncompressed WAV)
+      AudioRecord.start();
+      setRecording(true);
       isRecordingRef.current = true;
       recordingPhaseRef.current = 'ambient';
       ambientStartTimeRef.current = Date.now();
@@ -55,7 +70,7 @@ export default function Index() {
       // Wait 1.5 seconds for ambient noise collection
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Load and play sweep sound
+      // Load and play sweep sound using expo-av (for playback)
       const { sound } = await Audio.Sound.createAsync(
         require('@/assets/sounds/audiocheck.net_sweep_10Hz_22000Hz_-3dBFS_1s.wav'),
         { shouldPlay: false, volume: 1.0 }
@@ -81,7 +96,7 @@ export default function Index() {
       const totalRecordingTime = soundDuration + 2000;
       
       autoStopTimerRef.current = setTimeout(() => {
-        console.log("Auto-stop timer fired! isRecording:", isRecordingRef.current, "recording:", recordingRef.current);
+        console.log("Auto-stop timer fired! isRecording:", isRecordingRef.current);
         recordingPhaseRef.current = 'complete';
         stopRecording();
       }, totalRecordingTime) as unknown as NodeJS.Timeout;
@@ -91,8 +106,7 @@ export default function Index() {
       const errorMessage = err instanceof Error ? err.message : String(err);
       Alert.alert("Failed to start recording", errorMessage);
       // Reset all state
-      recordingRef.current = null;
-      setRecording(null);
+      setRecording(false);
       isRecordingRef.current = false;
       setRecordingStatus("Ready to record");
     }
@@ -100,10 +114,9 @@ export default function Index() {
 
   const stopRecording = async () => {
     try {
-      console.log("stopRecording called - isRecording:", isRecordingRef.current, "recording:", recordingRef.current !== null);
-      const currentRecording = recordingRef.current;
-      if (!currentRecording || !isRecordingRef.current) {
-        console.log("stopRecording: early return - no recording or not recording");
+      console.log("stopRecording called - isRecording:", isRecordingRef.current);
+      if (!isRecordingRef.current) {
+        console.log("stopRecording: early return - not recording");
         return;
       }
 
@@ -124,23 +137,26 @@ export default function Index() {
         }
       }
 
+      // Stop recording with AudioRecord (returns file path)
+      const recordingUri = await AudioRecord.stop();
       isRecordingRef.current = false;
-      await currentRecording.stopAndUnloadAsync();
-      const fullRecordingUri = currentRecording.getURI();
-      recordingRef.current = null;
-      setRecording(null);
+      setRecording(false);
       setRecordingStatus("Finished recording and saving...");
 
       // Generate descriptive filename base
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       const baseName = `${material}_${size}_${shape}_${description || 'recording'}_${timestamp}`;
       
-      // Filenames for the two recordings
-      const fullFileName = `${baseName}_full.m4a`;
-      const ambientFileName = `${baseName}_ambient.m4a`;
+      // Filenames for the two recordings (now WAV format)
+      const fullFileName = `${baseName}_full.wav`;
+      const ambientFileName = `${baseName}_ambient.wav`;
 
       // Copy the full recording to the new filename
-      const fullDestUri = await copyRecordingFile(fullRecordingUri, fullFileName);
+      const fullDestUri = await copyRecordingFile(recordingUri, fullFileName);
+      
+      if (!fullDestUri) {
+        throw new Error("Failed to copy recording file");
+      }
       
       // Show completion message
       Alert.alert("Finished recording!", `Saved as:\n${fullFileName}\n\nAmbient portion: first 1.5 seconds`);
@@ -151,8 +167,7 @@ export default function Index() {
       console.error("Failed to stop recording", err);
       Alert.alert("Failed to stop recording");
       // Reset all state on error
-      recordingRef.current = null;
-      setRecording(null);
+      setRecording(false);
       isRecordingRef.current = false;
       setRecordingStatus("Ready to record");
     }
@@ -190,11 +205,11 @@ export default function Index() {
       // Convert base64 to ArrayBuffer using proper method for React Native
       const arrayBuffer = decode(fileBase64);
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage (uncompressed WAV)
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('recordings')
         .upload(fileName, arrayBuffer, {
-          contentType: 'audio/m4a',
+          contentType: 'audio/wav',
           upsert: false,
         });
 
@@ -293,23 +308,23 @@ export default function Index() {
         <TouchableOpacity
           style={[
             styles.recordButton,
-            recording !== null && styles.buttonActive
+            recording && styles.buttonActive
           ]}
           onPress={startRecordingWithSound}
-          disabled={recording !== null}
+          disabled={recording}
         >
           <Text style={styles.buttonText}>
-            {recording !== null ? '🔴 Recording...' : '▶ Record with Sweep'}
+            {recording ? '🔴 Recording...' : '▶ Record with Sweep'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
             styles.cancelButton,
-            recording === null && styles.buttonDisabled
+            !recording && styles.buttonDisabled
           ]}
           onPress={stopRecording}
-          disabled={recording === null}
+          disabled={!recording}
         >
           <Text style={styles.buttonText}>Cancel Recording</Text>
         </TouchableOpacity>
